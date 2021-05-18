@@ -1,6 +1,8 @@
 
-## Analysis Functions used for Energetics of stream succession R project
-
+## Project: Semi-mechanistic modeling of river metabolism recovery following storm disturbances
+## Script: Analysis Functions
+## LE Koenig
+## last updated 19 February 2021
 
 
 ##===================================================================##
@@ -38,7 +40,7 @@
   
   
 ##===================================================================##
-##       CHEcK WHETHER NWIS SITE HAS IN SITU TURBIDITY DATA          ##
+##       CHECK WHETHER NWIS SITE HAS IN SITU TURBIDITY DATA          ##
 ##===================================================================##
   
   
@@ -57,8 +59,11 @@
   }
   
 
-
+##===================================================================##
+##          STANDARDIZE TIME SERIES INTO RELATIVE VALUES             ##
+##===================================================================##
   
-  
-  
+min_max_norm <- function(x) {
+    (x - min(x,na.rm=T)) / (max(x,na.rm=T) - min(x,na.rm=T))
+}
   
