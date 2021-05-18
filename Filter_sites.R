@@ -1,8 +1,10 @@
-## Semi-mechanistic modeling of GPP and autotrophic respiration
-## Flathead Lake Biological Station, 14 May 2019
+
+## Project: Semi-mechanistic modeling of river metabolism recovery following storm disturbances
+## Script: Filter sites
+## LE Koenig
+## last updated 30 January 2020
 
 ## The objective of this script is to filter sites from the Powell Center database of stream metabolism time series to use in the stream successional energetics project.
-## Last updated 30 January 2020 
 
 
 ## Load packages: 
@@ -10,8 +12,8 @@ library(dplyr)       # general data cleaning and manipulation
 library(ggplot2)     # create plots
 library(lubridate)   # format timestamps
 library(sf)          # working with spatial data
-library(leaflet)     # plotting spatial data    
-library(htmlwidgets) # saving spatial plots
+library(mapview)     # plot spatial data
+library(lutz)        # look up time zones
 
 ## require mda.streams package (see Appling et al. 2018: https://www.nature.com/articles/sdata2018292)
 #install.packages("mda.streams", dependencies = TRUE, 
@@ -125,7 +127,7 @@ source("./R/Analysis_Functions.R")
       print(i)
     } 
     
-    write.csv(site_data,"./output/PC_site_data.csv",row.names = FALSE) # 209/356 sites have in situ turbidity data (not taking into account data overlap/length of record)
+    #write.csv(site_data,"./output/PC_site_data.csv",row.names = FALSE) # 209/356 sites have in situ turbidity data (not taking into account data overlap/length of record)
     
    # How many of the filtered sites (from above) have turbidity data?
     # Approach A above, 16 sites
@@ -150,6 +152,7 @@ source("./R/Analysis_Functions.R")
       site.no <- substring(Filtered_sites_seasonalGPP$site[i],6)
       site.data <- whatNWISdata(siteNumber=site.no,service="uv")
       turbidity.data <- site.data[which(site.data$parm_cd %in% turb.pcodes),]
+      Filtered_sites_seasonalGPP$turbidity_pcode[i] <- turbidity.data$parm_cd[1]
       Filtered_sites_seasonalGPP$turbidity_start[i] <- as.character(min(turbidity.data$begin_date))
       Filtered_sites_seasonalGPP$turbidity_end[i] <- as.character(max(turbidity.data$end_date))
       Filtered_sites_seasonalGPP$turbidity_days[i] <- sum(turbidity.data$count_nu)
@@ -171,6 +174,25 @@ source("./R/Analysis_Functions.R")
                       sf::st_as_sf(.,coords=c("lon","lat"),crs=4267) %>%
                       sf::st_transform(.,4326)
     sites.sf <- rbind(sites.sf.NAD83sub,sites.sf.NAD27sub)
-      
+    
+  # Add a column that indicates the site's time zone:
+    sites.sf$tz <- tz_lookup(sites.sf, crs = 4326, method = "accurate", warn = TRUE)
+    
+  # Map filtered sites:
     mapview(sites.sf)
+    
+  # Convert sf object to a data frame and export:
+    sites2 <- sites.sf %>%
+              mutate(Lat = st_coordinates(sites.sf)[,2],
+                     Lon = st_coordinates(sites.sf)[,1],
+                     datum = "WGS84") %>%
+              st_drop_geometry(.)
+      
+    write.csv(sites2,"./output/data/PC_site_data_filtered.csv",row.names = FALSE)
+    
+    
+    
+    
+    
+    
     
