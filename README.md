@@ -1,5 +1,4 @@
 ### Energetics-of-stream-succession
-Analyze successional recovery patterns from stream metabolism time series
 
 This repository contains data, code, and output for analyzing successional recovery patterns from stream metabolism time series.
 
