@@ -6,7 +6,7 @@
 
 
 ##===================================================================##
-##                Estimate median (seasonal) GPP                     ##
+##                ESTIMATE MEDIAN (SEASONAL) GPP                     ##
 ##===================================================================##
 
   Grow.season.GPP <- function(data){
@@ -66,4 +66,18 @@
 min_max_norm <- function(x) {
     (x - min(x,na.rm=T)) / (max(x,na.rm=T) - min(x,na.rm=T))
 }
-  
+
+
+##===================================================================##
+##             PLOT PARAMETER POSTERIOR DISTRIBUTIONS                ##
+##===================================================================##
+
+post.plot <- function(param_post_df){
+    post_plot <- as.data.frame(param_post_df) %>%
+    ggplot() + geom_density(aes(x=param_post_df),fill="blue",alpha=.3) +
+    theme_cowplot() + theme(axis.title=element_text(size=11),axis.text=element_text(size=10),
+    plot.title = element_text(size=12))
+
+return(post_plot)
+    
+}
