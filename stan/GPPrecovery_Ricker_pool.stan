@@ -20,18 +20,22 @@
   real mu_b;                        // mean of the population model (mean b across storms)
   real<lower=0> sd_b;               // variance of the pouplation model (variance in b across storms)
 
-
   //error parameters:
   real<lower=0> sigma_proc; //process error
   real<lower=0> sigma_obs; // obs error for gpp
   }
 
-
   model{
   
   // Initialize biomass:
   vector[N] GPPmod;
-  B[1]~normal(log(GPP[1]/light[1]),0.05);
+  if(GPP[1] < 0){
+    B[1] ~ normal(log(0.01/light[1]),0.005);
+  }
+  else {
+    B[1]~normal(log(GPP[1]/light[1]),0.005);   //small sd around initialized biomass
+  }
+  
   GPPmod[1] = light[1] * exp(B[1]);
   
   // Process model:
@@ -44,9 +48,13 @@
    
    if(storm_ID[i] > storm_ID[i-1])
     {
-    B[i] ~ normal(log(GPP[i]/light[i]),0.05);
-    }
-   else {
+      if(GPP[i] < 0){
+          B[i] ~ normal(log(0.01/light[i]),0.005);
+      }
+      else {
+          B[i]~normal(log(GPP[1]/light[i]),0.005);   //small sd around initialized biomass
+      }}
+  else {
     B[i] ~ normal(B[i-1] + r[storm_ID[i]] + b[storm_ID[i]]*exp(B[i-1]), sigma_proc);
    }
     GPPmod[i] = light[i] * exp(B[i]);

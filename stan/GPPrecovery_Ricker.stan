@@ -46,18 +46,18 @@
   }
   
   // Priors on model parameters:
-  r ~ normal(0,0.5);            // prior on growth rate, r
-  b ~ normal(0,0.1);            // prior on ricker model term r/k
+  r ~ normal(0,1);            // prior on growth rate, r
+  b ~ normal(0,1);            // prior on ricker model term r/k
   sigma_proc ~ normal(0,1);     // prior on process error
   sigma_obs ~ normal(0,1);     // strong prior on observation error that corresponds w/ abs. sd on GPP posterior
   }
     
   generated quantities{
-  real GPP_tilde[N];               // posterior predictive check on GPP
+  //real GPP_tilde[N];               // posterior predictive check on GPP
 
-  for(i in 1:N){
-    GPP_tilde[i] = normal_rng(light[i] * exp(B[i]),sigma_obs);
-  }
+  //for(i in 1:N){
+  //  GPP_tilde[i] = normal_rng(light[i] * exp(B[i]),sigma_obs);
+  //}
   }
     
   
