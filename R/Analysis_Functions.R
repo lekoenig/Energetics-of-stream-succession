@@ -9,6 +9,28 @@
 ##             READ IN FILTERED POWELL CENTER DATA                   ##
 ##===================================================================##
 
+load_PC_data <- function(){
+  
+  # Read in list of filtered sites:
+  filtered.sites <- read.csv("./data/out/PC_site_data_filtered.csv",header=TRUE,stringsAsFactors = FALSE)
+  
+  # Read in Powell Center dataset from Maite (contains all sites):
+  dailytot <- readRDS("./data/in/Appling_data_manual/dailytot.rds") %>% 
+    rename("DATE"="date") %>%
+    mutate(date = as.POSIXct(as.character(DATE),format="%Y-%m-%d"),
+           doy = as.numeric(strftime(date, format = "%j")),
+           year = year(date)) %>%
+    select(-DATE) %>%
+    # filter Powell Center data set based on list of filtered sites above:
+    filter(.,site %in% unique(filtered.sites$site)) %>%
+    # create a new column for storm number:
+    mutate(storm_id = NA)
+  
+  # Split filtered dataset into a list based on site name:
+  metab.dat <- split(dailytot, dailytot$site)
+}
+
+
 load_filtered_PC_data <- function(){
   
   # Read in list of filtered sites:
@@ -35,7 +57,32 @@ load_filtered_PC_data <- function(){
 ##                  DOWNLOAD POWELL CENTER DATA                      ##
 ##===================================================================##
 
-## 1) Function to get model output item id's:
+## 1) Function to download metabolism site data:
+download_site_data <- function(save_dir){
+  
+  # ScienceBase item id for Appling river metabolism data repo (https://www.sciencebase.gov/catalog/item/59bff507e4b091459a5e0982)
+  # 1. Site data:
+  sb_item_id <- "59bff64be4b091459a5e098b"
+  
+  dl_dir <- tempdir()
+  
+  # Download zip folders containing model fits:
+  site_data <- item_file_download(sb_item_id, dest_dir=dl_dir)
+  
+  # Read file (metadata: https://www.sciencebase.gov/catalog/file/get/59eb9c0ae4b0026a55ffe389?f=__disk__d6%2F07%2Fbb%2Fd607bb041a2005311ff1318d695ed79907f439cf&transform=1&allowOpen=true)
+  site_data_df <- read.csv(paste(dl_dir,"/site_data.tsv",sep=""), sep = "\t",header=TRUE)
+  
+  # Clean up files and save model fits in save_dir:
+  files <- list.files(dl_dir, full.names = TRUE) 
+  invisible(file.remove(files))
+  
+  write.csv(site_data,paste(save_dir,"/site_data.csv",sep=""))
+  
+  return(site_data_df)
+}
+
+
+## 2A) Function to get model output item id's:
 get_modfit_ids <- function(){
   
   # ScienceBase item id for Appling river metabolism data repo (https://www.sciencebase.gov/catalog/item/59bff507e4b091459a5e0982):
@@ -53,7 +100,7 @@ get_modfit_ids <- function(){
   file_ids <- sapply(sb_id_children,function(item) item$id)
 }
 
-## 2) Function to download model outputs from ScienceBase:
+## 2B) Function to download model outputs from ScienceBase:
 download_model_fits <- function(file_id){
   
   dl_dir <- tempdir()
@@ -88,8 +135,35 @@ download_model_fits <- function(file_id){
   return(mod_ts)
 }
 
-
 ## 3) Function to download metabolism estimates and predictors:
+download_model_diagnostics <- function(save_dir){
+  
+  # ScienceBase item id for Appling river metabolism data repo (https://www.sciencebase.gov/catalog/item/59bff507e4b091459a5e0982)
+  # 7. Model diagnostics:
+  sb_item_id <- "59eb9bafe4b0026a55ffe382"
+  
+  dl_dir <- tempdir()
+  
+  # Download zip folders containing model fits:
+  model_diagn_zip <- item_file_download(sb_item_id, dest_dir=dl_dir)
+  
+  # Unpack zips:
+  unzip(zipfile = model_diagn_zip[grep(".zip",model_diagn_zip)], exdir = dl_dir)
+  
+  # Read file (metadata: https://www.sciencebase.gov/catalog/file/get/59eb9c0ae4b0026a55ffe389?f=__disk__d6%2F07%2Fbb%2Fd607bb041a2005311ff1318d695ed79907f439cf&transform=1&allowOpen=true)
+  model_diagnostics <- read.csv(paste(dl_dir,"/diagnostics.tsv",sep=""), sep = "\t",header=TRUE) 
+
+  # Clean up files and save model fits in save_dir:
+  files <- list.files(dl_dir, full.names = TRUE) 
+  invisible(file.remove(files))
+  
+  write.csv(model_diagnostics,paste(save_dir,"/diagnostics.csv",sep=""))
+  
+  return(model_diagnostics)
+}
+
+
+## 4) Function to download metabolism estimates and predictors:
 download_metab_est <- function(save_dir){
   
   # ScienceBase item id for Appling river metabolism data repo (https://www.sciencebase.gov/catalog/item/59bff507e4b091459a5e0982)
@@ -106,20 +180,25 @@ download_metab_est <- function(save_dir){
   
   # Read file (metadata: https://www.sciencebase.gov/catalog/file/get/59eb9c0ae4b0026a55ffe389?f=__disk__d6%2F07%2Fbb%2Fd607bb041a2005311ff1318d695ed79907f439cf&transform=1&allowOpen=true)
   metab_est <- read.csv(paste(dl_dir,"/daily_predictions.tsv",sep=""), sep = "\t",header=TRUE) %>%
-               rename("light_Wm2" = "shortwave",
-                      "discharge_m3s" = "discharge",
-                      "velocity_ms" = "velocity")
-
+               rename("DATE"="date") %>%
+               mutate(date = as.POSIXct(as.character(DATE), format="%Y-%m-%d"),
+                      doy = as.numeric(strftime(date, format = "%j")),
+                      year = lubridate::year(date)) %>%
+               select(-"DATE")
+          
   # Clean up files and save model fits in save_dir:
   files <- list.files(dl_dir, full.names = TRUE) 
   invisible(file.remove(files))
   
-  write.csv(metab_est,paste(save_dir,"daily_predictions.csv",sep=""))
+  write.csv(metab_est,paste(save_dir,"/daily_predictions.csv",sep=""))
   
   return(metab_est)
 }
 
 
+#rename("light_Wm2" = "shortwave",
+#"discharge_m3s" = "discharge",
+#"velocity_ms" = "velocity")
 
 ##===================================================================##
 ##                ESTIMATE MEDIAN (SEASONAL) GPP                     ##
@@ -153,25 +232,59 @@ download_metab_est <- function(save_dir){
     
     return(out)
   }
+
+    
+##===================================================================##
+##               FIND METABOLISM START AND END DATES                 ##
+##===================================================================##
   
+find_metab_dates <- function(site){
+  df <- metab_filter %>% filter(site_name == site)
+  out <- data.frame(
+    site_name = site,
+    metab_start_date = as.character(min(df$date)),
+    metab_end_date = as.character(max(df$date)),
+    metab_days = length(unique(df$date))
+  )
+}  
   
+
 ##===================================================================##
 ##       CHECK WHETHER NWIS SITE HAS IN SITU TURBIDITY DATA          ##
 ##===================================================================##
   
-  
-  check.turbidity.data <- function(nwis_site){
+  check_turbidity_data <- function(nwis_site){
     
-    #turbidity.data <- readNWISuv(site.no, "63675", 
-    #                             "2007-01-01", "2018-12-31")
-    #turbidity.flag <- ifelse(length(turbidity.data)>0,"YES","NO.DATA")
+    # usgs parameterCd <- "63680"  # In situ turbidity
+    # see also: https://or.water.usgs.gov/grapher/fnu.html
+    # using turbidity methods EPA 180.1 or ISO7027 NTU or FNU
+
+    turb_pcodes <- c("63675","63676","63677","63678","63679","63680","63681","63682","72213","63683","63684")
     
-    turb.pcodes <- c("63675","63676","63677","63678","63679","63680","63681","63682","72213","63683","63684")
-  
-    site.data <- whatNWISdata(siteNumber=site.no,service="uv")
-    turbidity.data <- turb.pcodes %in% site.data$parm_cd
-    turbidity.flag <- ifelse("TRUE" %in% turbidity.data,"YES","NO.DATA")
-    return(turbidity.flag)
+    site_no <- substring(nwis_site,6,100)
+    site_data <- whatNWISdata(siteNumber=site_no,service="uv")
+    turbidity_data <- turb_pcodes %in% site_data$parm_cd
+    turbidity_flag <- ifelse("TRUE" %in% turbidity_data,"YES","NO.DATA")
+    
+    if(turbidity_flag == "YES"){
+    turbidity_data <- site_data[which(site_data$parm_cd %in% turb_pcodes),] %>%
+                      select(site_no,parm_cd,begin_date,end_date,count_nu) %>%
+                      summarize(turbidity_start = as.character(min(begin_date)),
+                                turbidity_end = as.character(max(end_date)),
+                                turbidity_days = sum(count_nu))
+    }
+    site_info <- readNWISsite(site_no)
+    
+    out <- data.frame(
+      site_name = nwis_site,
+      drain_area_km2 = site_info$drain_area_va*2.58999, # convert mi^2 to km^2
+      turbidity_data = turbidity_flag,
+      turbidity_start = ifelse(turbidity_flag == "YES",turbidity_data$turbidity_start,NA),
+      turbidity_end = ifelse(turbidity_flag == "YES",turbidity_data$turbidity_end,NA),
+      turbidity_total_days = ifelse(turbidity_flag == "YES",turbidity_data$turbidity_days,NA)
+    )
+    
+    return(out)
   }
   
 
