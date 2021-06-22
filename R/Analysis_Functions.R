@@ -9,32 +9,10 @@
 ##             READ IN FILTERED POWELL CENTER DATA                   ##
 ##===================================================================##
 
-load_PC_data <- function(){
-  
-  # Read in list of filtered sites:
-  filtered.sites <- read.csv("./data/out/PC_site_data_filtered.csv",header=TRUE,stringsAsFactors = FALSE)
-  
-  # Read in Powell Center dataset from Maite (contains all sites):
-  dailytot <- readRDS("./data/in/Appling_data_manual/dailytot.rds") %>% 
-    rename("DATE"="date") %>%
-    mutate(date = as.POSIXct(as.character(DATE),format="%Y-%m-%d"),
-           doy = as.numeric(strftime(date, format = "%j")),
-           year = year(date)) %>%
-    select(-DATE) %>%
-    # filter Powell Center data set based on list of filtered sites above:
-    filter(.,site %in% unique(filtered.sites$site)) %>%
-    # create a new column for storm number:
-    mutate(storm_id = NA)
-  
-  # Split filtered dataset into a list based on site name:
-  metab.dat <- split(dailytot, dailytot$site)
-}
-
-
 load_filtered_PC_data <- function(){
   
   # Read in list of filtered sites:
-  filtered.sites <- read.csv("./data/out/PC_site_data_filtered.csv",header=TRUE,stringsAsFactors = FALSE)
+  filtered.sites <- read.csv("./data/out/site_data_filtered.csv",header=TRUE,stringsAsFactors = FALSE)
   
   # Read in Powell Center dataset from Maite (contains all sites):
   dailytot <- readRDS("./data/in/Appling_data_manual/dailytot.rds") %>% 
@@ -66,13 +44,13 @@ download_site_data <- function(save_dir){
   
   dl_dir <- tempdir()
   
-  # Download zip folders containing model fits:
+  # Download zip folders containing site data:
   site_data <- item_file_download(sb_item_id, dest_dir=dl_dir)
   
   # Read file (metadata: https://www.sciencebase.gov/catalog/file/get/59eb9c0ae4b0026a55ffe389?f=__disk__d6%2F07%2Fbb%2Fd607bb041a2005311ff1318d695ed79907f439cf&transform=1&allowOpen=true)
   site_data_df <- read.csv(paste(dl_dir,"/site_data.tsv",sep=""), sep = "\t",header=TRUE)
   
-  # Clean up files and save model fits in save_dir:
+  # Clean up files and save site data in save_dir:
   files <- list.files(dl_dir, full.names = TRUE) 
   invisible(file.remove(files))
   
@@ -83,7 +61,7 @@ download_site_data <- function(save_dir){
 
 
 ## 2A) Function to get model output item id's:
-get_modfit_ids <- function(){
+get_modfit_ids <- function(site){
   
   # ScienceBase item id for Appling river metabolism data repo (https://www.sciencebase.gov/catalog/item/59bff507e4b091459a5e0982):
   # 6. Model outputs:
@@ -98,6 +76,10 @@ get_modfit_ids <- function(){
   file_names <- sapply(sb_id_children, function(item) item$title)
   file_urls <- sapply(sb_id_children,function(item) item$link$url)
   file_ids <- sapply(sb_id_children,function(item) item$id)
+
+  # return ids:
+  out <- data.frame(site_name = gsub("_fits","",x = file_names), file_id = file_ids)
+  return(out)
 }
 
 ## 2B) Function to download model outputs from ScienceBase:
@@ -107,9 +89,7 @@ download_model_fits <- function(file_id){
   
   # Download zip folders containing model fits:
   model_zip <- item_file_download(file_id, dest_dir=dl_dir)
-  site_name <- substr(model_zip[1],
-                      start = stringr::str_locate(model_zip, "nwis")[1],
-                      stop = stringr::str_locate(model_zip, "min_fit.zip")[1]-4)
+  site_name <- stringr::str_sub(stringr::str_extract(model_zip[1], "nwis_\\s*(.*?)\\_"),start=1,end = -2)
   mod_name <- substr(model_zip[1],
                      start = stringr::str_locate(model_zip, "nwis")[1],
                      stop=stringr::str_locate(model_zip,".zip")[1]-1)
@@ -131,7 +111,7 @@ download_model_fits <- function(file_id){
   # Clean up files and save model fits in save_dir:
   files <- list.files(dl_dir, full.names = TRUE) 
   invisible(file.remove(files))
-  #write.csv(mod_ts,paste(save_dir,site_name,"_fit.csv",sep=""))
+  #read.csv(mod_ts,paste(save_dir,site_name,"_fit.csv",sep=""))
   return(mod_ts)
 }
 
@@ -195,10 +175,6 @@ download_metab_est <- function(save_dir){
   return(metab_est)
 }
 
-
-#rename("light_Wm2" = "shortwave",
-#"discharge_m3s" = "discharge",
-#"velocity_ms" = "velocity")
 
 ##===================================================================##
 ##                ESTIMATE MEDIAN (SEASONAL) GPP                     ##
