@@ -7,6 +7,7 @@
   
   vector[N] light;             // relativized to max value
   vector[N] GPP;               // for now, simulated GPP values
+  vector[N] GPP_sd;            // sd of GPP posterior distribution
   }
   
   parameters{
@@ -61,13 +62,6 @@
 
    }
    
-   //for(j in 1:storm_N){
-   
-   //r[j] ~ normal(mu_r,sd_r);
-   //b[j] ~ normal(mu_b,sd_b);
-   
-   //}
-   
   // GPP observation model:
   for(i in 2:N){
       GPP[i] ~ normal(GPPmod[i],sigma_obs);   //observation model
@@ -77,7 +71,7 @@
   r ~ normal(0,1);             // prior on growth rate, r
   b ~ normal(0,1);             // prior on ricker model term r/k
   sigma_proc ~ normal(0,1);    // prior on process error
-  sigma_obs ~ normal(0,0.5);     // prior on observation error
+  sigma_obs ~ normal(mean(GPP_sd),sd(GPP_sd));     // prior on observation error
   
   
   // Hyper-priors: 

@@ -1,10 +1,13 @@
 
   
   data{
-  int <lower=1> N; // number of time steps (days)
-  vector[N] light; // relativized to max value
-  vector[N] GPP;   // for now, simulated GPP values
+  int <lower=1> N;  // number of time steps (days)
+  vector[N] light;  // relativized to max value
+  vector[N] GPP;    // for now, simulated GPP values
+  vector[N] GPP_sd; // sd estimates from Appling GPP posterior prob. distribution
   }
+  
+  //transformed data{
 
   parameters{
   
@@ -24,7 +27,6 @@
   for(i in 1:N){
     GPPmod[i] = light[i] * exp(B[i]);
   }
-  
   }
     
   model{
@@ -42,14 +44,14 @@
 
   // GPP observation model:
   for(i in 2:N){
-      GPP[i] ~ normal(GPPmod[i],sigma_obs);   
+      GPP[i] ~ normal(GPPmod[i],sigma_obs); 
   }
   
   // Priors on model parameters:
   r ~ normal(0,1);            // prior on growth rate, r
-  b ~ normal(0,1);            // prior on ricker model term r/k
+  b ~ normal(0,0.25);            // prior on ricker model term r/k
   sigma_proc ~ normal(0,1);     // prior on process error
-  sigma_obs ~ normal(0,1);     // strong prior on observation error that corresponds w/ abs. sd on GPP posterior
+  sigma_obs ~ normal(mean(GPP_sd),sd(GPP_sd));     // strong prior on observation error that corresponds w/ abs. sd on GPP posterior
   }
     
   generated quantities{
@@ -57,7 +59,8 @@
 
   //for(i in 1:N){
   //  GPP_tilde[i] = normal_rng(light[i] * exp(B[i]),sigma_obs);
-  //}
+  //}    
+
   }
     
   

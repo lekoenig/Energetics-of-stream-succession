@@ -103,10 +103,7 @@ download_model_fits <- function(file_id){
             mutate(site = site_name,
                    fit = mod_name,
                    date = as.POSIXct(as.character(DATE),format="%Y-%m-%d"),
-                   SiteYr = year(date)) %>%
-            select(site,fit,date,SiteYr,GPP_daily_mean,GPP_daily_2.5pct,GPP_daily_97.5pct,GPP_daily_Rhat,
-                   ER_daily_mean,ER_daily_2.5pct,ER_daily_97.5pct,ER_daily_Rhat,K600_daily_mean,
-                   K600_daily_2.5pct,K600_daily_97.5pct,K600_daily_Rhat)
+                   SiteYr = year(date))
   
   # Clean up files and save model fits in save_dir:
   files <- list.files(dl_dir, full.names = TRUE) 
