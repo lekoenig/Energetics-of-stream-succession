@@ -14,7 +14,6 @@ library(patchwork)     # plot formatting
 library(grid)          # plot formatting
 library(lubridate)     # format timestamps
 library(dataRetrieval) # interface with NWIS 
-library(rstan)         # fit bayesian models using stan
 library(tidybayes)     # easily extract draws from Bayesian models 
 library(sbtools)       # interface with ScienceBase
 
@@ -71,35 +70,37 @@ storm$light_rel_smooth[which(is.na(storm$light_rel_smooth))] <- 0.33
 which(storm$GPP<0)
 head(storm)
 
-
+# use fake data where GPP saturates:
+storm <- read.csv("./data/fakedata/GPP_sat_testing_fakedata.csv",header=TRUE) %>% mutate(date = as.Date(as.POSIXct(as.character(date), format="%m/%d/%y")))
+storm %>% ggplot() + geom_point(aes(x=date,y=GPP_daily_mean),color="darkgreen") + theme_classic()
+  
 ##===================================================================##
 ##             Generate *simulated* GPP time series                  ##
 ##===================================================================##
 
 # Simulate data according to Ricker model to see if we can retrieve parameters:
+set.seed(2000)
 
 # Simulate data across how many storms?
 no_storms <- 10
 
 # Define parameter values:
 r <- 0.53                                    # specific growth rate
-r.true.err <- r + rnorm(10,0,0.05)
+r.true.err <- (r + rnorm(10,0,0.05))
 K <- 15                                      # biomass carrying capacity (g C m-2)
 K.true.err <- K + rnorm(10,0,1)
 b <- -r.true.err/K.true.err                  # substitute for r/K ("b")
 sigma_proc <- 0.1                            # process error (based on log biomass data so this is really a scale parameter)
-#sigma_obs <- 0.05
 sigma_obs <- rnorm(1,mean(obs_err$GPP_daily_sd,na.rm = TRUE),sd(obs_err$GPP_daily_sd,na.rm=TRUE))  # observation/measurement error
-#sigma_obs_rel <- sigma_obs/mean(obs_err$GPP_daily_mean,na.rm=TRUE) # relative observation error (for log-GPP)
-  
+#sigma_obs <- 0.1                             # effectively "turn off" observation error
+#sigma_proc <- 0.01                          # effectively "turn off" process error
+
 # initialize time series:
 dT <- 1                                             # time step
 t <- seq(from=1,to=length(storm$date),by=dT)        # for now, all simulated storms are the same length
 L <- storm$light_rel_smooth                         # relativized light - 3 day moving average (unitless)
 GPP.pred <- rep(NA,length(t))
-GPP.pred[1] <- 0.46                                 # Starting GPP; g O2 m^-2 d^-1
-GPP.pred.l <- rep(NA,length(t))                     # logged GPP
-GPP.pred.l <- log(0.46)
+GPP.pred[1] <- 0.45                                 # Starting GPP; g O2 m^-2 d^-1
 B <- rep(NA,length(t))
 B[1] <- log(GPP.pred[1]/L[1])                               
 
@@ -112,7 +113,6 @@ for(j in 1:no_storms){
   for(i in 1:length(t)){
     B[i+1] <- B[i] + r.true.err[j] + b[j]*exp(B[i]) + rnorm(1,mean=0,sd = sigma_proc)
     GPP.pred[i] <- L[i] * (exp(B[i])) + rnorm(1,mean=0,sd=sigma_obs)
-    #GPP.pred.l[i] <- log(L[i]) + B[i] + rnorm(1,mean=0,sd = sigma_obs_rel) # add *relative* observation error (~sigma_obs/mean(GPP))
   }
   
   df <- data.frame(storm_id = rep(j,length(t)), time = t,light=L,B = B[c(1:length(t))], GPPsim = GPP.pred)
@@ -134,105 +134,30 @@ ypred <- storm1$GPPsim
 print(ypred) # Is GPPsim negative?
 
 # Does simulated GPP *look like* the data?
-storm$GPP_sim <- GPP.pred
-storm %>% ggplot() + geom_point(aes(x=date,y=GPP),color="darkgreen") + geom_line(aes(x=date,y=GPP),alpha=.5,color="darkgreen") + theme_classic() + 
-          geom_point(aes(x=date,y=GPP.pred),color="darkblue")
+storm$GPP_sim <- ypred
+storm %>% ggplot() + geom_point(aes(x=date,y=GPP_daily_mean),color="darkgreen") + geom_line(aes(x=date,y=GPP_daily_mean),alpha=.5,color="darkgreen") + theme_classic() + 
+          geom_point(aes(x=date,y=GPP_sim),color="darkblue")
 
 
 ##===================================================================##
-##        STAN: Non-hierarchical version of Ricker model             ##
+##         Run non-hierarchical version of Ricker model              ##
 ##===================================================================##
 
-## Write out stan instructions:  
-
-sink("./stan/GPPrecovery_Ricker.stan")
-
-cat("
-  
-  data{
-  int <lower=1> N;  // number of time steps (days)
-  vector[N] light;  // relativized to max value
-  vector[N] GPP;    // for now, simulated GPP values
-  vector[N] GPP_sd; // sd estimates from Appling GPP posterior prob. distribution
-  }
-  
-  //transformed data{
-
-  parameters{
-  
-  //biomass growth parameters
-  real <lower=0> r;       // specific growth rate
-  real B[N];              // log-transformed latent biomass
-  real b;                 // r/K term in Ricker model
-
-  //error parameters
-  real<lower=0> sigma_proc;  //process error
-  real<lower=0> sigma_obs;   // obs error for gpp
-  }
-
-  transformed parameters{
-  vector[N] GPPmod;
-  
-  for(i in 1:N){
-    GPPmod[i] = light[i] * exp(B[i]);
-  }
-  }
-    
-  model{
-  
-  // Initialize biomass:
-  if(GPP[1] < 0)
-    B[1] ~ normal(log(0.01/light[1]),0.005);
-  else
-    B[1]~normal(log(GPP[1]/light[1]),0.005);   //small sd around initialized biomass 
-  
- // Process model:
-   for(i in 2:N){
-       B[i] ~ normal(B[i-1] + r + b*exp(B[i-1]), sigma_proc);
-   }
-
-  // GPP observation model:
-  for(i in 2:N){
-      GPP[i] ~ normal(GPPmod[i],sigma_obs); 
-  }
-  
-  // Priors on model parameters:
-  r ~ normal(0,1);            // prior on growth rate, r
-  b ~ normal(0,0.25);            // prior on ricker model term r/k
-  sigma_proc ~ normal(0,1);     // prior on process error
-  sigma_obs ~ normal(mean(GPP_sd),sd(GPP_sd));     // strong prior on observation error that corresponds w/ abs. sd on GPP posterior
-  }
-    
-  generated quantities{
-  //real GPP_tilde[N];               // posterior predictive check on GPP
-
-  //for(i in 1:N){
-  //  GPP_tilde[i] = normal_rng(light[i] * exp(B[i]),sigma_obs);
-  //}    
-
-  }
-    
-  ",fill=TRUE)
-sink()
-
-## Create a list housing the simulated data:
+# Create a list housing the simulated data:
 fake_data <- list(N=length(storm1$time),GPP=storm1$GPPsim,light=storm1$light,GPP_sd = storm1$GPP_sd)
 
-## Run stan model:
-fit <- rstan::stan("./stan/GPPrecovery_Ricker.stan",data=fake_data,iter=6000,chains=4,
-                   control = list(stepsize = 0.5,adapt_delta=0.99,max_treedepth=12))
+# Run stan model:
+fit <- rstan::stan("./stan/Ricker_mod_obserr_daily.stan",data=fake_data,iter=4000,chains=4,
+                   control = list(stepsize = 0.5,adapt_delta=0.99,max_treedepth=10))
 #shinystan::launch_shinystan(fit)
 
-## Inspect traceplots:
-traceplot(fit, pars= c("r", "b", "sigma_proc","sigma_obs"))
+# Inspect traceplots:
+rstan::traceplot(fit, pars= c("r", "b", "sigma_proc","sigma_obs"))
 
-## Inspect pairs:
-pairs(fit, pars = c("r", "lp__","b"))
+# Extract posterior probability distributions for parameters:
+fit_extract<-rstan::extract(fit) # pulls out our mcmc chains
 
-## Extract posterior probability distributions for parameters:
-fit_extract<-extract(fit) # pulls out our mcmc chains
-
-## Plot parameters:
+# Plot parameters:
 rplot <- post.plot(fit_extract$r) + geom_vline(xintercept=r.true.err[1],color="black",lty=2) + labs(x="r") + ggtitle(label ="Recovery rate")
 bplot <- post.plot(fit_extract$b) + geom_vline(xintercept=(b[1]),color="black",lty=2) + labs(x="b") + ggtitle(label ="Parameter equal to r/K")
 sigmaplot <- post.plot(fit_extract$sigma_proc) + geom_vline(xintercept=sigma_proc,color="black",lty=2) + labs(x="sigma_proc") + ggtitle(label ="Process error")
@@ -241,7 +166,7 @@ obsplot <- post.plot(fit_extract$sigma_obs) + geom_vline(xintercept=sigma_obs,co
 sim_plot <- rplot + bplot + sigmaplot + obsplot + plot_layout(ncol=2)
 print(sim_plot)
 
-## Plot joint distribution r + b:
+# Plot joint distribution r + b:
 post_df <- data.frame(r = fit_extract$r,
                       b = fit_extract$b,
                       sigma_obs = fit_extract$sigma_obs,
