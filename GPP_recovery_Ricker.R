@@ -162,7 +162,6 @@ rplot <- post.plot(fit_extract$r) + geom_vline(xintercept=r.true.err[1],color="b
 bplot <- post.plot(fit_extract$b) + geom_vline(xintercept=(b[1]),color="black",lty=2) + labs(x="b") + ggtitle(label ="Parameter equal to r/K")
 sigmaplot <- post.plot(fit_extract$sigma_proc) + geom_vline(xintercept=sigma_proc,color="black",lty=2) + labs(x="sigma_proc") + ggtitle(label ="Process error")
 obsplot <- post.plot(fit_extract$sigma_obs) + geom_vline(xintercept=sigma_obs,color="black",lty=2) + labs(x="sigma_obs") + ggtitle(label ="Obs error")
-
 sim_plot <- rplot + bplot + sigmaplot + obsplot + plot_layout(ncol=2)
 print(sim_plot)
 
@@ -180,4 +179,44 @@ joint_error_plot_dens <- ggExtra::ggMarginal(joint_error_plot, type = "density",
 
 joint_plot <- plot_grid(joint_param_plot_dens,joint_error_plot_dens,ncol=2)
 print(joint_plot)
+
+
+##======================================================================##
+##   Run non-hierarchical version of Ricker model: model corr. params   ##
+##======================================================================##
+
+# Run stan model:
+fit_corrparams <- rstan::stan("./stan/Ricker_mod_corrparams.stan",data=fake_data,iter=6000,chains=4,
+                   control = list(stepsize = 0.5,adapt_delta=0.99,max_treedepth=13))
+
+summary_corrparams <- rstan::summary(fit_corrparams, 
+                      pars = c("beta[1]", "beta[2]","beta_tilde[1]","beta_tilde[2]","sigma_b[1]","sigma_b[2]",
+                               "sigma_proc","sigma_obs","L"), 
+                      probs = c(0.1, 0.9))$summary
+
+# Inspect traceplots:
+rstan::traceplot(fit_corrparams, pars= c("beta[1]", "beta[2]", "sigma_proc","sigma_obs"))
+
+# Inspect pairs:
+#pairs(fit_corrparams, pars = c("beta_tilde[1]", "lp__","beta_tilde[2]"))
+
+# Transformed parameters beta are highly correlated, but *sampled parameters beta_tilde* are not:
+draws_beta <- as.matrix(fit_corrparams, pars = "beta")
+draws_betatilde <- as.matrix(fit_corrparams, pars = "beta_tilde")
+plot_grid(
+bayesplot::mcmc_scatter(draws_beta),
+bayesplot::mcmc_scatter(draws_betatilde),
+ncol=2)
+
+# Extract posterior probability distributions for parameters:
+fit_extract_corrparams <- rstan::extract(fit_corrparams) # pulls out our mcmc chains
+
+# Plot parameters:
+rplot <- post.plot(fit_extract_corrparams$beta[,1]) + geom_vline(xintercept=r.true.err[1],color="black",lty=2) + labs(x="r") + ggtitle(label ="Recovery rate")
+bplot <- post.plot(fit_extract_corrparams$beta[,2]) + geom_vline(xintercept=(b[1]),color="black",lty=2) + labs(x="b") + ggtitle(label ="Parameter equal to r/K")
+sigmaplot <- post.plot(fit_extract_corrparams$sigma_proc) + geom_vline(xintercept=sigma_proc,color="black",lty=2) + labs(x="sigma_proc") + ggtitle(label ="Process error")
+obsplot <- post.plot(fit_extract_corrparams$sigma_obs) + geom_vline(xintercept=sigma_obs,color="black",lty=2) + labs(x="sigma_obs") + ggtitle(label ="Obs error")
+
+sim_plot <- rplot + bplot + sigmaplot + obsplot + plot_layout(ncol=2)
+print(sim_plot)
 
