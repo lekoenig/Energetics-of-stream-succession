@@ -53,5 +53,10 @@ model{
   }
     
 generated quantities{
+  real GPP_tilde[N];              // posterior predictive check on GPP
+  
+  for(i in 1:N){
+    GPP_tilde[i] = normal_rng(light[i] * exp(B[i]),sigma_obs);
+  }
 }
 

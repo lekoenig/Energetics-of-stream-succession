@@ -166,19 +166,36 @@ sim_plot <- rplot + bplot + sigmaplot + obsplot + plot_layout(ncol=2)
 print(sim_plot)
 
 # Plot joint distribution r + b:
-post_df <- data.frame(r = fit_extract$r,
-                      b = fit_extract$b,
-                      sigma_obs = fit_extract$sigma_obs,
-                      sigma_proc = fit_extract$sigma_proc)
-
-joint_param_plot <- ggplot(post_df, aes(r, b)) + geom_point() + theme_classic() + labs(x="r",y="b") 
+bayesplot::color_scheme_set("blue")
+joint_param_plot <- bayesplot::mcmc_scatter(as.array(fit),pars=c("r","b"),size=1.5,alpha=0.5) + theme_classic()
 joint_param_plot_dens <- ggExtra::ggMarginal(joint_param_plot, type = "density",fill="darkblue",alpha=.25)
 
-joint_error_plot <- ggplot(post_df, aes(sigma_obs, sigma_proc)) + geom_point() + theme_classic() + labs(x="sigma_obs",y="sigma_proc") 
+joint_error_plot <- bayesplot::mcmc_scatter(as.array(fit),pars=c("sigma_obs","sigma_proc"),size=1.5,alpha=0.5) + theme_classic()
 joint_error_plot_dens <- ggExtra::ggMarginal(joint_error_plot, type = "density",fill="darkblue",alpha=.25)
 
 joint_plot <- plot_grid(joint_param_plot_dens,joint_error_plot_dens,ncol=2)
 print(joint_plot)
+
+# Plot actual fit of the model to the data:
+post_GPP <- data.frame(GPPmod = fit_extract$GPPmod)  %>%
+            tidyr::pivot_longer(data = .,cols=starts_with("GPP"),names_to = "day", values_to = "value") %>%
+            group_by(day) %>% summarize(GPPmod = median(value,na.rm=T)) %>%
+            mutate(timestep = as.integer(substr(day,8,11))) %>% arrange(.,timestep) %>% 
+            left_join(.,storm1[,c("time","GPPsim")],by=c("timestep"="time"))
+post_GPP2 <- data.frame(GPPmod = fit_extract$GPPmod)  %>%
+            tidyr::pivot_longer(data = .,cols=starts_with("GPP"),names_to = "day", values_to = "value") %>%
+            mutate(timestep = as.integer(substr(day,8,11))) %>% arrange(.,timestep) %>% 
+            left_join(.,storm1[,c("time","GPPsim")],by=c("timestep"="time"))
+
+plot_grid(
+post_GPP %>% ggplot() + geom_point(aes(x=GPPsim,y=GPPmod),color="black") + theme_classic() + 
+             geom_abline(intercept=0,slope=1,lty=2) + labs(y=expression(GPP-mod[median~posterior]),x=expression(Simulated~(known)~GPP)),
+
+post_GPP2 %>% ggplot() + geom_point(aes(x=timestep,y=value,color="Posterior GPP-mod")) + 
+             geom_point(aes(x=timestep,y=GPPsim,color="Simulated GPP")) +
+             scale_color_manual(values=c("gray","blue"),name="") + 
+             theme_classic() + labs(x="timestep",y="GPP"),
+ncol=2,rel_widths = c(0.5,1))
 
 
 ##======================================================================##
