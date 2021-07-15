@@ -12,12 +12,12 @@ parameters{
   
   //biomass growth parameters
   real B[N];              // log-transformed latent biomass
-  real <lower=0> r;       // specific growth rate
+  real <lower = 0> r;       // specific growth rate
   real b;                 // r/K term in Ricker model
   
   //error parameters
-  real<lower=0> sigma_proc;  //process error
-  real<lower=0> sigma_obs;   // obs error for gpp
+  real <lower = 0> sigma_proc;  //process error
+  real <lower = 0> sigma_obs;   // obs error for gpp
 }
 
 transformed parameters{
@@ -32,9 +32,9 @@ model{
   
   // Initialize biomass:
   if(GPP[1] < 0)
-    B[1] ~ normal(log(0.01/light[1]),0.005);
+    B[1] ~ normal(log(0.01/light[1]),1);
   else
-    B[1] ~ normal(log(GPP[1]/light[1]),0.005);   //small sd around initialized biomass 
+    B[1] ~ normal(log(GPP[1]/light[1]),1);   
   
  // Process model:
    for(i in 2:N){
@@ -50,7 +50,7 @@ model{
   r ~ normal(0,1);              // prior on growth rate, r
   b ~ normal(0,1);              // prior on ricker model term r/k
   sigma_proc ~ normal(0,1);     // prior on process error
-  sigma_obs ~ normal(0,1);     // strong prior on observation error that corresponds w/ abs. sd on GPP posterior
+  sigma_obs ~ normal(0,1);     // prior on observation error
   }
     
 generated quantities{

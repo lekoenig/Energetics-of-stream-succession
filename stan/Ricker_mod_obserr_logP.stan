@@ -6,6 +6,8 @@ data{
 }
 
 transformed data{
+//vector[N] P;        // model log-GPP
+//P = log(GPP);
 }
 
 parameters{
@@ -21,20 +23,17 @@ parameters{
 }
 
 transformed parameters{
-  vector[N] GPPmod;
+  vector[N] Pmod;
 
   for(i in 1:N){
-    GPPmod[i] = light[i] * exp(B[i]);
+    Pmod[i] = log(light[i]) + B[i];
   }
 }
     
 model{
   
   // Initialize biomass:
-  if(GPP[1] < 0)
-    B[1] ~ normal(log(0.01/light[1]),0.005);
-  else
-    B[1] ~ normal(log(GPP[1]/light[1]),0.005);   //small sd around initialized biomass 
+    B[1] ~ normal((GPP[1] - log(light[1])),1);   
   
  // Process model:
    for(i in 2:N){
@@ -43,21 +42,21 @@ model{
 
   // GPP observation model:
   for(i in 2:N){
-      GPP[i] ~ normal(GPPmod[i],sigma_obs); 
+      GPP[i] ~ normal(Pmod[i],sigma_obs); 
   }
   
   // Priors on model parameters:
   r ~ normal(0,1);              // prior on growth rate, r
   b ~ normal(0,1)T[,0];              // prior on ricker model term r/k
   sigma_proc ~ normal(0,1)T[0,];     // prior on process error
-  sigma_obs ~ normal(mean(GPP_sd),sd(GPP_sd))T[0,];     // strong prior on observation error that corresponds w/ abs. sd on GPP posterior
+  sigma_obs ~ normal(0,1)T[0,];     // strong prior on observation error that corresponds w/ abs. sd on GPP posterior
   }
     
 generated quantities{
   real GPP_tilde[N];              // posterior predictive check on GPP
   
   for(i in 1:N){
-    GPP_tilde[i] = normal_rng(light[i] * exp(B[i]),sigma_obs);
+    GPP_tilde[i] = normal_rng(log(light[i]) + B[i],sigma_obs);
   }
 }
 

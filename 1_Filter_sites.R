@@ -6,7 +6,6 @@
 
 ## The objective of this script is to filter sites from the Powell Center database of stream metabolism time series to use in the stream successional energetics project.
 
-
 ## Load packages: 
 library(dplyr)         # general data cleaning and manipulation
 library(tidyr)         # general data cleaning and manipulation
@@ -14,6 +13,8 @@ library(purrr)         # general data cleaning and manipulation
 library(lubridate)     # format timestamps
 library(dataRetrieval) # interface with NWIS
 library(sbtools)       # interface with Science Base
+library(maps)          # access some basemap data
+library(sf)            # geospatial data manipulation 
 
 source("./R/Analysis_Functions.R")
 
@@ -33,6 +34,34 @@ metab_all <- download_metab_est(in_save_dir)
 
 # Read in Powell Center data (model diagnostics) - exports file called 'diagnostics.csv':
 diagnostics <- download_model_diagnostics(in_save_dir)
+
+
+##===================================================================##
+##                    Map Powell Center sites                        ##
+##===================================================================##
+
+site_info <- metab_all %>% group_by(site_name) %>% filter(!is.na(GPP)) %>% summarize(n = n())
+
+
+state <- map_data("state") 
+usa <- map_data("usa") %>% st_as_sf(.,coords=c("long","lat"),crs=4326)
+pc_sites_sp <- left_join(site_info,pc_sites,by="site_name") %>%
+               st_as_sf(.,coords=c("lon","lat"),crs=4269) %>% st_transform(.,4326) %>%
+               st_filter(st_as_sfc(st_bbox(usa)),
+                         .predicate=st_within) %>%
+               mutate(lon = st_coordinates(.)[,1],
+                      lat = st_coordinates(.)[,2])
+
+ggplot() + geom_polygon(data=state,aes(x=long,y=lat,group=group),fill=NA,color="gray50",size=.25)+
+           geom_point(data=pc_sites_sp,aes(x=lon,y=lat,color=n))+
+           viridis::scale_color_viridis(name="Daily metabolism \nestimates",option = "D")+
+           coord_map("albers",lat0=30,lat1=40) +
+           theme_bw() + 
+           theme(legend.position = c(0.9, 0.2),legend.text = element_text(size=10),legend.title=element_text(size=11),
+                 axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+                 axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank(),
+                 panel.border = element_blank(),panel.grid=element_blank()) 
+  
 
 ##===================================================================##
 ##                  Filter Powell Center sites                       ##
