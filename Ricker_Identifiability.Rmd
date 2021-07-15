@@ -51,7 +51,7 @@ $$logB_{t+1} = logB_{t} + r - b\times B_t + \epsilon_t, \;\;\;\;\;\;\epsilon_t \
 
 Note that $-r$/$K$ has been replaced with a new parameter, $b$ in the process model. I implemented the observation and process models within a Bayesian framework using STAN and the rstan package (Stan Development Team 2020) in R (R Core Team 2020), such that model parameters $r$, $b$, $B_t$, $\sigma_{obs}$, and $\sigma_{proc}$ are estimated based on model likelihood and stated priors. **The problem that I'm having is that parameters r and b are inherently correlated, which is leading to issues with sampling (and sometimes model identifiability).** Below I outline my attempts to fit this model on *simulated* GPP data.  
   
-**TLDR: The Ricker model is likely too complex to fit to single storm recovery trajectories. A multi-level modeling approach improves our ability to fit the model without computational issues that undermine posterior probability estimates and to recover simulated parameters.**  
+**TLDR**: The Ricker model is likely too complex to fit to single storm recovery trajectories. A multi-level modeling approach improves our ability to fit the model without computational issues that undermine posterior probability estimates and to recover simulated parameters.  
 
 ```{r,echo=FALSE,warning=FALSE}
 
@@ -484,7 +484,7 @@ print(plots4)
 
 **4. Some other random notes/things to try**  
   
-- Even though it didn't seem to be the culprit, I took Joanna's advice and loosened the sigma around the initial values for biomass (lines 39 and 41 in model code [here](www.github.com)).  
+- Even though it didn't seem to be the culprit, I took Joanna's advice and loosened the sigma around the initial values for biomass (lines 35 and 37 in model code [here](https://github.com/lekoenig/Energetics-of-stream-succession/blob/master/stan/Ricker_mod_obserr.stan)).  
 - Per Bob's recommendation, I made a slight change to how I was simulating $r$ across the storms by treating r as a global effect as opposed to incorporating random error in among-storm $r$ values, which might cause difficulties in the multilevel models.  
 - I didn't try modeling the difference in log biomass (i.e., $logB_{t}-logB_{t-1}$). I'd be interested to learn more about why differencing the data might help model fits in some cases, but since it doesn't reduce the number of parameters or change how stan interprets the parameters or transformed parameters, I didn't think that was likely to make a big difference in this case. 
 - In the original file I sent around, I took a stab at explicitly modeling the $r-b$ covariance structure to appease sampling difficulties resulting from the correlation between the $r$ and $b$ parameters. I acknowledge that it's OK if parameters are correlated as long as you can recover the parameter values, however, I think in some cases the sampling inefficiencies that result from correlated parameters can cause issues with model convergence and posterior estimation. I'm parking this idea for now in favor of thinking through the simpler approaches outlined above and especially for alternative models, however, I do think this would be an interesting topic to return to since correlated parameters might pop up often.  
@@ -493,7 +493,7 @@ print(plots4)
 
 **5. Fit a multi-level model to multiple simulated storms**  
   
-In this case, I used the same "known" parameter values, but applied a multi-level model to 10 simulated storms rather than just one. Because I want to add more data without lengthening the individual storm recovery trajectories past what we can realistically garner from the Appling et al. time series, I kept the length of storms at 30 days for this simulation. The model relies on partial pooling (more info [here](https://mc-stan.org/users/documentation/case-studies/pool-binary-trials.html)) and "borrows strength" from several groups (in this case, storms) to estimate a population-level $r$ and $b$. Perhaps not surprisingly since all storms were simulated with the same global $r$, the group-level posterior $r$ estimates "shrink" towards the population-level parameter, in this case denoted by $mu_r$. I'll note that while complete and no pooling models ran without issue, I experienced a lot of divergences and other convergence issues when trying to fit the partial pooling model. I was able to solve these issues by re-parameterizing $r$ and $b$ (see STAN manual [here](https://mc-stan.org/docs/2_27/stan-users-guide/reparameterization-section.html)). The re-parameterized model can be viewed on the github [repo](www.github.com) for this project.  
+In this case, I used the same "known" parameter values, but applied a multi-level model to 10 simulated storms rather than just one. Because I want to add more data without lengthening the individual storm recovery trajectories past what we can realistically garner from the Appling et al. time series, I kept the length of storms at 30 days for this simulation. The model relies on partial pooling (more info [here](https://mc-stan.org/users/documentation/case-studies/pool-binary-trials.html)) and "borrows strength" from several groups (in this case, storms) to estimate a population-level $r$ and $b$. Perhaps not surprisingly since all storms were simulated with the same global $r$, the group-level posterior $r$ estimates "shrink" towards the population-level parameter, in this case denoted by $mu-r$. I'll note that while complete pooling and no pooling models ran without issue, I experienced a lot of divergences and other convergence issues when trying to fit the partial pooling model. I was able to solve these issues by re-parameterizing $r$ and $b$ (see STAN manual [here](https://mc-stan.org/docs/2_27/stan-users-guide/reparameterization-section.html)). The re-parameterized model can be viewed on [github](https://github.com/lekoenig/Energetics-of-stream-succession/blob/master/stan/Ricker_mod_obserr_hierarchical_reparam.stan).  
   
   
 ```{r,echo=FALSE,warning=FALSE}
@@ -549,7 +549,8 @@ print(plots5)
   
 A single storm trajectory likely does not contain enough data to fit a complex model like the Ricker model. It appears that a multi-level model can successfully recover parameter values and generate reasonable posterior estimates of GPP, so that's good! Ultimately, the Ricker model may not be the best model to represent the short recovery trajectories, however, I was interested in fitting this model as a straw man to use for model comparison that can directly build on Joanna's work. My next steps are to fit alternative models that describe GPP (and ER) recovery following storms that we can use to quantify resilience and compete against the Ricker model.  
 
-  
+
+<br>  
 
 
 
